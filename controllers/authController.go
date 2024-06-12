@@ -1,11 +1,10 @@
 package controllers
 
 import (
-	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/gofiber/fiber/v2"
 	"github.com/your/repo/database"
 	"github.com/your/repo/models"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/your/repo/utils"
 	"strconv"
 	"time"
 )
@@ -24,14 +23,13 @@ func Register(c *fiber.Ctx) error {
 		})
 	}
 
-	password, _ := bcrypt.GenerateFromPassword([]byte(data["password"]), 13)
-
 	user := models.User{
 		FirstName: data["first_name"],
 		LastName:  data["last_name"],
 		Email:     data["email"],
-		Password:  password,
+		RoleId:    1,
 	}
+	user.SetPassword(data["password"])
 
 	database.DB.Create(&user)
 
@@ -54,22 +52,54 @@ func Login(c *fiber.Ctx) error {
 			"message": "Böyle bir kullanıcı bulunamadı!",
 		})
 	}
-	if err := bcrypt.CompareHashAndPassword(user.Password, []byte(data["password"])); err != nil {
+	if err := user.ComparePassword(data["password"]); err != nil {
 		c.Status(400)
 		return c.JSON(fiber.Map{
 			"message": "Şifre yanlış!",
 		})
 	}
-	expirationTime := time.Now().Add(time.Hour * 24)
 
-	claims := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.StandardClaims{
-		Issuer:    strconv.Itoa(int(user.Id)),
-		ExpiresAt: time.Now().Add(time.Hour * 24).Unix(),
-	})
-	token, err := claims.SignedString([]byte("secret"))
+	token, err := utils.GenerateJwt(strconv.Itoa(int(user.Id)))
 
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
-	return c.JSON(token)
+
+	cookie := fiber.Cookie{
+		Name:     "jwt",
+		Value:    token,
+		Expires:  time.Now().Add(time.Hour * 24),
+		HTTPOnly: true,
+	}
+
+	c.Cookie(&cookie)
+	return c.JSON(fiber.Map{
+		"token":   token,
+		"data":    user,
+		"message": "success",
+	})
+}
+
+func User(c *fiber.Ctx) error {
+	cookie := c.Cookies("jwt")
+
+	id, _ := utils.ParseJwt(cookie)
+
+	var user models.User
+	database.DB.Where("id = ?", id).First(&user)
+	return c.JSON(user)
+}
+
+func Logout(c *fiber.Ctx) error {
+	cookie := fiber.Cookie{
+		Name:     "jwt",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		HTTPOnly: true,
+	}
+	c.Cookie(&cookie)
+	return c.JSON(fiber.Map{
+		"message": "success",
+	})
+
 }
