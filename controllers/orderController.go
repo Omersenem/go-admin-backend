@@ -11,9 +11,15 @@ import (
 )
 
 func AllOrders(c *fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", "1"))
+	var filter Filter
+	c.BodyParser(&filter)
+	pages := strconv.Itoa(filter.Page)
+	limit := strconv.Itoa(filter.Limit)
 
-	return c.JSON(models.Paginate(database.DB, &models.Order{}, page))
+	page, _ := strconv.Atoi(c.Query("page", pages, "limit", limit))
+	limitInt, _ := strconv.Atoi(c.Query("limit", limit))
+
+	return c.JSON(models.Paginate(database.DB, &models.Order{}, page, limitInt))
 }
 
 func Export(c *fiber.Ctx) error {

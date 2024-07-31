@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/your/repo/database"
 	"github.com/your/repo/middlewares"
@@ -8,14 +9,25 @@ import (
 	"strconv"
 )
 
+type Filter struct {
+	Page  int `json:"page"`
+	Limit int `json:"limit"`
+}
+
 func AllUsers(c *fiber.Ctx) error {
 	if err := middlewares.IsAuthorized(c, "users"); err != nil {
 		return err
 	}
 
-	page, _ := strconv.Atoi(c.Query("page", "1"))
+	var filter Filter
+	c.BodyParser(&filter)
+	pages := strconv.Itoa(filter.Page)
+	limit := strconv.Itoa(filter.Limit)
 
-	return c.JSON(models.Paginate(database.DB, &models.User{}, page))
+	page, _ := strconv.Atoi(c.Query("page", pages, "limit", limit))
+	limitInt, _ := strconv.Atoi(c.Query("limit", limit))
+
+	return c.JSON(models.Paginate(database.DB, &models.User{}, page, limitInt))
 }
 
 func CreateUser(c *fiber.Ctx) error {
@@ -66,6 +78,8 @@ func UpdateUser(c *fiber.Ctx) error {
 
 func DeleteUser(c *fiber.Ctx) error {
 	id, _ := strconv.Atoi(c.Params("id"))
+
+	fmt.Println("İddd", id)
 
 	user := models.User{
 		Id: uint(id),
